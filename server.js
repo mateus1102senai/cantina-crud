@@ -4,7 +4,7 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // Middleware
 app.use(cors());
@@ -250,7 +250,7 @@ app.use((err, req, res, next) => {
 });
 
 // Rota 404
-app.use('*', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({ message: 'Rota não encontrada' });
 });
 
