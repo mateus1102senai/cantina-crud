@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Variáveis CSS Customizadas */
+:root {
+  --cantina-primary: #2563eb;
+  --cantina-secondary: #64748b;
+  --cantina-accent: #f59e0b;
+  --cantina-success: #10b981;
+  --cantina-warning: #f59e0b;
+  --cantina-error: #ef4444;
+  --cantina-bg: #f8fafc;
+  --cantina-card: #ffffff;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Reset e configurações base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--cantina-bg);
+  color: #1e293b;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Componentes customizados */
+@layer components {
+  .btn-cantina {
+    @apply px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 inline-flex items-center justify-center gap-2;
+  }
+  
+  .btn-cantina:hover {
+    @apply transform scale-105 shadow-md;
+  }
+  
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-600 text-white hover:bg-gray-700;
+  }
+  
+  .btn-success {
+    @apply bg-green-600 text-white hover:bg-green-700;
+  }
+  
+  .btn-warning {
+    @apply bg-yellow-600 text-white hover:bg-yellow-700;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+  
+  .card-cantina {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+  }
+  
+  .input-cantina {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200;
+  }
+  
+  .table-cantina {
+    @apply w-full bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200;
+  }
+  
+  .table-cantina th {
+    @apply bg-gray-50 px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+  }
+  
+  .table-cantina td {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-t border-gray-200;
+  }
+}
+
+/* Utilitários personalizados */
+@layer utilities {
+  .text-cantina-primary {
+    color: var(--cantina-primary);
+  }
+  
+  .text-cantina-secondary {
+    color: var(--cantina-secondary);
+  }
+  
+  .bg-cantina-primary {
+    background-color: var(--cantina-primary);
+  }
+  
+  .bg-cantina-secondary {
+    background-color: var(--cantina-secondary);
+  }
+  
+  .shadow-cantina {
+    box-shadow: var(--shadow-md);
+  }
+  
+  .gradient-cantina {
+    background: linear-gradient(135deg, var(--cantina-primary) 0%, var(--cantina-accent) 100%);
+  }
+}
+
+/* Animações */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .table-cantina {
+    @apply text-sm;
+  }
+  
+  .card-cantina {
+    @apply p-4;
+  }
+  
+  .btn-cantina {
+    @apply px-4 py-2 text-sm;
+  }
+}
+
+/* Estados de foco e acessibilidade */
+.btn-cantina:focus,
+.input-cantina:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-opacity-50;
+}
+
+/* Scrollbar customizada */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
