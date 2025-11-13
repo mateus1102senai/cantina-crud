@@ -1,0 +1,40 @@
+{
+  "name": "cantina-crud",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "server": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mateus1102senai/cantina-crud.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mateus1102senai/cantina-crud/issues"
+  },
+  "homepage": "https://github.com/mateus1102senai/cantina-crud#readme",
+  "description": "Sistema de gerenciamento para cantina escolar com CRUD completo",
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.4",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.22",
+    "next": "^16.0.3",
+    "postcss": "^8.5.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3"
+  }
+}
