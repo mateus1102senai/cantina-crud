@@ -26,6 +26,7 @@
   "description": "Sistema de gerenciamento para cantina escolar com CRUD completo",
   "dependencies": {
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19.2.4",
     "@types/react-dom": "^19.2.3",
     "bcryptjs": "^3.0.3",
@@ -34,8 +35,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "mysql2": "^3.15.3",
     "next": "^16.0.3",
+    "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "typescript": "^5.9.3"

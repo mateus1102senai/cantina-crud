@@ -1,369 +1,403 @@
--- =====================================================
--- SETUP BANCO DE DADOS - SISTEMA CANTINA CRUD
--- =====================================================
--- Este arquivo contém a estrutura completa do banco
--- de dados para o sistema de gerenciamento da cantina
--- =====================================================
+-- =====================================
+-- SISTEMA DE CANTINA - BANCO DE DADOS
+-- PostgreSQL
+-- =====================================
 
--- Criar banco de dados
-CREATE DATABASE IF NOT EXISTS cantina_db
-CHARACTER SET utf8mb4 
-COLLATE utf8mb4_unicode_ci;
+-- Criar banco de dados (execute separadamente no PostgreSQL)
+-- CREATE DATABASE cantina_crud;
 
-USE cantina_db;
+-- Conecte ao banco cantina_crud antes de executar o restante
 
--- =====================================================
--- TABELA DE USUÁRIOS
--- =====================================================
-CREATE TABLE usuarios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    nome_completo VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE,
-    role ENUM('admin', 'operador', 'vendedor') DEFAULT 'operador',
-    ativo BOOLEAN DEFAULT TRUE,
-    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ultima_alteracao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- 1. Tabela PRODUTOS
+CREATE TABLE IF NOT EXISTS produtos (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    qtd INTEGER NOT NULL,          -- Quantidade
+    price DECIMAL(10,2) NOT NULL,  -- Preço
+    available BOOLEAN NOT NULL     -- Disponível (Sim/Não)
 );
 
--- =====================================================
--- TABELA DE CATEGORIAS
--- =====================================================
-CREATE TABLE categorias (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(50) UNIQUE NOT NULL,
-    descricao TEXT,
-    ativo BOOLEAN DEFAULT TRUE,
-    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- 2. Tabela USUARIOS
+CREATE TABLE IF NOT EXISTS usuarios (
+    id SERIAL PRIMARY KEY,
+    "user" VARCHAR(50) NOT NULL UNIQUE, -- Nome de usuário (único) - "user" é palavra reservada
+    password VARCHAR(100) NOT NULL
 );
 
--- =====================================================
--- TABELA DE PRODUTOS
--- =====================================================
-CREATE TABLE produtos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
-    descricao TEXT,
-    codigo_barras VARCHAR(50) UNIQUE,
-    categoria_id INT,
-    preco DECIMAL(10,2) NOT NULL,
-    custo DECIMAL(10,2),
-    estoque_atual INT DEFAULT 0,
-    estoque_minimo INT DEFAULT 5,
-    estoque_maximo INT,
-    unidade_medida ENUM('UN', 'KG', 'L', 'CX') DEFAULT 'UN',
-    perecivel BOOLEAN DEFAULT FALSE,
-    data_validade DATE,
-    imagem_url VARCHAR(255),
-    ativo BOOLEAN DEFAULT TRUE,
-    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ultima_alteracao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+-- 3. Tabela VENDAS
+CREATE TABLE IF NOT EXISTS vendas (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (categoria_id) REFERENCES categorias(id),
-    INDEX idx_categoria (categoria_id),
-    INDEX idx_nome (nome),
-    INDEX idx_codigo_barras (codigo_barras)
-);
-
--- =====================================================
--- TABELA DE MOVIMENTAÇÃO DE ESTOQUE
--- =====================================================
-CREATE TABLE movimentacao_estoque (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    produto_id INT NOT NULL,
-    tipo_movimentacao ENUM('entrada', 'saida', 'ajuste', 'venda') NOT NULL,
-    quantidade INT NOT NULL,
-    estoque_anterior INT NOT NULL,
-    estoque_novo INT NOT NULL,
-    valor_unitario DECIMAL(10,2),
-    valor_total DECIMAL(10,2),
-    observacoes TEXT,
-    usuario_id INT,
-    data_movimentacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    produto_id INTEGER NOT NULL,
+    usuario_id INTEGER NOT NULL,
     
     FOREIGN KEY (produto_id) REFERENCES produtos(id),
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-    INDEX idx_produto (produto_id),
-    INDEX idx_data (data_movimentacao),
-    INDEX idx_tipo (tipo_movimentacao)
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
--- =====================================================
--- TABELA DE VENDAS
--- =====================================================
-CREATE TABLE vendas (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_venda VARCHAR(20) UNIQUE NOT NULL,
-    valor_total DECIMAL(10,2) NOT NULL,
-    desconto DECIMAL(10,2) DEFAULT 0,
-    valor_final DECIMAL(10,2) NOT NULL,
-    forma_pagamento ENUM('dinheiro', 'cartao', 'pix', 'fiado') NOT NULL,
-    status_venda ENUM('concluida', 'cancelada', 'pendente') DEFAULT 'concluida',
-    observacoes TEXT,
-    usuario_id INT,
-    data_venda TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-    INDEX idx_numero_venda (numero_venda),
-    INDEX idx_data_venda (data_venda),
-    INDEX idx_status (status_venda)
-);
+-- =====================================
+-- INSERIR DADOS DE EXEMPLO
+-- =====================================
 
--- =====================================================
--- TABELA DE ITENS DA VENDA
--- =====================================================
-CREATE TABLE itens_venda (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    venda_id INT NOT NULL,
-    produto_id INT NOT NULL,
-    quantidade INT NOT NULL,
-    preco_unitario DECIMAL(10,2) NOT NULL,
-    subtotal DECIMAL(10,2) NOT NULL,
-    
-    FOREIGN KEY (venda_id) REFERENCES vendas(id) ON DELETE CASCADE,
-    FOREIGN KEY (produto_id) REFERENCES produtos(id),
-    INDEX idx_venda (venda_id),
-    INDEX idx_produto (produto_id)
-);
+-- Limpar dados existentes (se houver)
+DELETE FROM vendas;
+DELETE FROM produtos;
+DELETE FROM usuarios;
 
--- =====================================================
--- TABELA DE FORNECEDORES
--- =====================================================
-CREATE TABLE fornecedores (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
-    cnpj VARCHAR(18) UNIQUE,
-    contato VARCHAR(100),
-    telefone VARCHAR(20),
-    email VARCHAR(100),
-    endereco TEXT,
-    ativo BOOLEAN DEFAULT TRUE,
-    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Reset sequences
+ALTER SEQUENCE produtos_id_seq RESTART WITH 1;
+ALTER SEQUENCE usuarios_id_seq RESTART WITH 1;
+ALTER SEQUENCE vendas_id_seq RESTART WITH 1;
 
--- =====================================================
--- TABELA DE COMPRAS/ENTRADA DE PRODUTOS
--- =====================================================
-CREATE TABLE compras (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_nota VARCHAR(50),
-    fornecedor_id INT,
-    valor_total DECIMAL(10,2) NOT NULL,
-    data_compra DATE NOT NULL,
-    data_entrega DATE,
-    status_compra ENUM('pendente', 'entregue', 'cancelada') DEFAULT 'pendente',
-    observacoes TEXT,
-    usuario_id INT,
-    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id),
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
-    INDEX idx_data_compra (data_compra),
-    INDEX idx_fornecedor (fornecedor_id)
-);
-
--- =====================================================
--- TABELA DE ITENS DA COMPRA
--- =====================================================
-CREATE TABLE itens_compra (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    compra_id INT NOT NULL,
-    produto_id INT NOT NULL,
-    quantidade INT NOT NULL,
-    preco_unitario DECIMAL(10,2) NOT NULL,
-    subtotal DECIMAL(10,2) NOT NULL,
-    
-    FOREIGN KEY (compra_id) REFERENCES compras(id) ON DELETE CASCADE,
-    FOREIGN KEY (produto_id) REFERENCES produtos(id),
-    INDEX idx_compra (compra_id),
-    INDEX idx_produto (produto_id)
-);
-
--- =====================================================
--- INSERIR DADOS INICIAIS
--- =====================================================
-
--- Usuário administrador padrão
-INSERT INTO usuarios (username, password_hash, nome_completo, email, role) VALUES
-('admin', '$2b$10$8X9.KQJ1X9ZQQ9Q9Q9Q9Q9', 'Administrador Sistema', 'admin@cantina.com', 'admin'),
-('operador', '$2b$10$8X9.KQJ1X9ZQQ9Q9Q9Q9Q9', 'Operador Cantina', 'operador@cantina.com', 'operador');
-
--- Categorias padrão
-INSERT INTO categorias (nome, descricao) VALUES
-('Lanches', 'Sanduíches, hamburgers, wraps'),
-('Bebidas', 'Sucos, refrigerantes, água, café'),
-('Salgados', 'Coxinha, pastel, esfirra, pão de açúcar'),
-('Doces', 'Brigadeiros, pudins, tortas, bolos'),
-('Frutas', 'Frutas frescas e saladas de frutas'),
-('Outros', 'Itens diversos');
+-- Usuários padrão (senha: "123456" hasheada)
+INSERT INTO usuarios ("user", password) VALUES 
+('admin', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+('cantina', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+('funcionario', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
 
 -- Produtos de exemplo
-INSERT INTO produtos (nome, descricao, categoria_id, preco, custo, estoque_atual, estoque_minimo, estoque_maximo) VALUES
-('Sanduíche Natural', 'Sanduíche com peito de peru, queijo, alface e tomate', 1, 6.00, 3.50, 25, 10, 50),
-('Suco de Laranja 300ml', 'Suco natural de laranja', 2, 5.50, 3.00, 30, 15, 60),
-('Pastel de Frango', 'Pastel assado com recheio de frango desfiado', 3, 6.50, 3.80, 20, 10, 40),
-('Refrigerante Lata', 'Refrigerante diversos sabores 350ml', 2, 4.00, 2.50, 50, 20, 100),
-('Brigadeiro', 'Brigadeiro tradicional', 4, 2.00, 1.00, 30, 12, 50),
-('Água Mineral 500ml', 'Água mineral sem gás', 2, 2.50, 1.50, 40, 25, 80),
-('Coxinha', 'Coxinha de frango tradicional', 3, 5.00, 2.80, 25, 15, 50),
-('Bolo de Chocolate', 'Fatia de bolo de chocolate com cobertura', 4, 4.50, 2.20, 15, 8, 30);
+INSERT INTO produtos (name, qtd, price, available) VALUES
+('Pão de Açúcar', 50, 3.00, true),
+('Refrigerante Coca-Cola 350ml', 30, 5.00, true),
+('Salgadinho Chips', 25, 3.00, true),
+('Café Expresso', 100, 3.00, true),
+('Sanduíche Natural', 15, 8.00, true),
+('Água Mineral 500ml', 40, 2.50, true),
+('Bolo de Chocolate', 10, 4.50, true),
+('Suco de Laranja', 20, 4.00, true),
+('Biscoito Recheado', 35, 2.00, true),
+('Iogurte Natural', 25, 3.50, true);
 
--- Fornecedores de exemplo
-INSERT INTO fornecedores (nome, cnpj, contato, telefone, email) VALUES
-('Distribuidora Alimentar Ltda', '12.345.678/0001-90', 'João Silva', '(11) 98765-4321', 'joao@distribuidora.com'),
-('Padaria Central', '98.765.432/0001-10', 'Maria Santos', '(11) 91234-5678', 'maria@padaria.com'),
-('Hortifruti Fresh', '11.223.344/0001-55', 'Carlos Oliveira', '(11) 95555-6666', 'carlos@fresh.com');
+-- Vendas de exemplo
+INSERT INTO vendas (produto_id, usuario_id) VALUES
+(1, 1), (2, 1), (3, 2), (4, 1), (5, 2),
+(6, 3), (7, 2), (8, 1), (1, 3), (2, 2);
 
--- =====================================================
--- VIEWS ÚTEIS
--- =====================================================
+-- =====================================
+-- VIEWS ÚTEIS PARA RELATÓRIOS
+-- =====================================
 
--- View de produtos com status de estoque
-CREATE VIEW vw_produtos_estoque AS
+-- View para produtos com baixo estoque
+CREATE OR REPLACE VIEW produtos_baixo_estoque AS
+SELECT 
+    id,
+    name,
+    qtd,
+    price,
+    CASE 
+        WHEN qtd <= 5 THEN 'Crítico'
+        WHEN qtd <= 10 THEN 'Baixo'
+        ELSE 'Normal'
+    END as status_estoque
+FROM produtos 
+WHERE qtd <= 10 AND available = true;
+
+-- View para relatório de vendas
+CREATE OR REPLACE VIEW relatorio_vendas AS
+SELECT 
+    v.id,
+    v.created_at,
+    p.name as produto_nome,
+    p.price as produto_preco,
+    u."user" as usuario_nome
+FROM vendas v
+JOIN produtos p ON v.produto_id = p.id
+JOIN usuarios u ON v.usuario_id = u.id
+ORDER BY v.created_at DESC;
+
+-- View para produtos mais vendidos
+CREATE OR REPLACE VIEW produtos_mais_vendidos AS
 SELECT 
     p.id,
-    p.nome,
-    p.codigo_barras,
-    c.nome AS categoria,
-    p.preco,
-    p.estoque_atual,
-    p.estoque_minimo,
-    p.estoque_maximo,
+    p.name,
+    COUNT(v.id) as total_vendas,
+    SUM(p.price) as receita_total
+FROM produtos p
+LEFT JOIN vendas v ON p.id = v.produto_id
+GROUP BY p.id, p.name
+HAVING COUNT(v.id) > 0
+ORDER BY total_vendas DESC;
+
+-- =====================================
+-- FUNCTIONS (PostgreSQL equivale a procedures)
+-- =====================================
+
+-- Function para registrar venda e atualizar estoque
+CREATE OR REPLACE FUNCTION registrar_venda(
+    p_produto_id INTEGER,
+    p_usuario_id INTEGER
+) RETURNS JSON AS $$
+DECLARE
+    produto_qtd INTEGER;
+    produto_disponivel BOOLEAN;
+    nova_venda_id INTEGER;
+    result JSON;
+BEGIN
+    -- Verificar se o produto existe e está disponível
+    SELECT qtd, available INTO produto_qtd, produto_disponivel 
+    FROM produtos WHERE id = p_produto_id;
+    
+    -- Verificar se há estoque suficiente
+    IF produto_qtd > 0 AND produto_disponivel = true THEN
+        -- Registrar a venda
+        INSERT INTO vendas (produto_id, usuario_id) 
+        VALUES (p_produto_id, p_usuario_id)
+        RETURNING id INTO nova_venda_id;
+        
+        -- Reduzir o estoque
+        UPDATE produtos SET qtd = qtd - 1 WHERE id = p_produto_id;
+        
+        result := json_build_object(
+            'success', true,
+            'message', 'Venda registrada com sucesso!',
+            'venda_id', nova_venda_id
+        );
+    ELSE
+        result := json_build_object(
+            'success', false,
+            'error', 'Produto indisponível ou sem estoque!'
+        );
+    END IF;
+    
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function para adicionar estoque
+CREATE OR REPLACE FUNCTION adicionar_estoque(
+    p_produto_id INTEGER,
+    p_quantidade INTEGER
+) RETURNS JSON AS $$
+DECLARE
+    nova_qtd INTEGER;
+    result JSON;
+BEGIN
+    UPDATE produtos 
+    SET qtd = qtd + p_quantidade 
+    WHERE id = p_produto_id
+    RETURNING qtd INTO nova_qtd;
+    
+    result := json_build_object(
+        'success', true,
+        'message', 'Estoque atualizado. Nova quantidade: ' || nova_qtd,
+        'nova_quantidade', nova_qtd
+    );
+    
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function para obter estatísticas do dashboard
+CREATE OR REPLACE FUNCTION obter_estatisticas() 
+RETURNS JSON AS $$
+DECLARE
+    result JSON;
+BEGIN
+    SELECT json_build_object(
+        'total_produtos', (SELECT COUNT(*) FROM produtos WHERE available = true),
+        'vendas_hoje', (SELECT COUNT(*) FROM vendas WHERE DATE(created_at) = CURRENT_DATE),
+        'receita_hoje', (SELECT COALESCE(SUM(p.price), 0) FROM vendas v JOIN produtos p ON v.produto_id = p.id WHERE DATE(v.created_at) = CURRENT_DATE),
+        'produtos_criticos', (SELECT COUNT(*) FROM produtos WHERE qtd <= 5 AND available = true)
+    ) INTO result;
+    
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================
+-- ÍNDICES PARA PERFORMANCE
+-- =====================================
+
+CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(name);
+CREATE INDEX IF NOT EXISTS idx_produtos_disponivel ON produtos(available);
+CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(created_at);
+CREATE INDEX IF NOT EXISTS idx_vendas_produto ON vendas(produto_id);
+CREATE INDEX IF NOT EXISTS idx_vendas_usuario ON vendas(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_usuarios_user ON usuarios("user");
+
+-- =====================================
+-- COMENTÁRIOS E DOCUMENTAÇÃO
+-- =====================================
+
+COMMENT ON TABLE produtos IS 'Tabela de produtos da cantina';
+COMMENT ON COLUMN produtos.name IS 'Nome do produto';
+COMMENT ON COLUMN produtos.qtd IS 'Quantidade em estoque';
+COMMENT ON COLUMN produtos.price IS 'Preço unitário do produto';
+COMMENT ON COLUMN produtos.available IS 'Indica se o produto está disponível para venda';
+
+COMMENT ON TABLE usuarios IS 'Tabela de usuários do sistema';
+COMMENT ON COLUMN usuarios."user" IS 'Nome de usuário único para login';
+COMMENT ON COLUMN usuarios.password IS 'Senha hasheada do usuário';
+
+COMMENT ON TABLE vendas IS 'Tabela de registro de vendas';
+COMMENT ON COLUMN vendas.created_at IS 'Data e hora da venda';
+
+-- =====================================
+-- SETUP CONCLUÍDO
+-- =====================================
+-- Execute este arquivo no seu PostgreSQL para criar
+-- toda a estrutura necessária para o sistema.
+-- 
+-- Credenciais padrão:
+-- - Usuário: admin, Senha: 123456
+-- - Usuário: cantina, Senha: 123456
+-- - Usuário: funcionario, Senha: 123456
+-- 
+-- Para executar:
+-- 1. Crie o banco: CREATE DATABASE cantina_crud;
+-- 2. Conecte ao banco: \c cantina_crud
+-- 3. Execute este script: \i setup.sql
+-- =====================================
+
+-- =====================================
+-- INSERIR DADOS DE EXEMPLO
+-- =====================================
+
+-- Usuários padrão (senha: "123456" hasheada)
+INSERT INTO usuarios (user, password) VALUES 
+('admin', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+('cantina', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+('funcionario', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
+
+-- Produtos de exemplo
+INSERT INTO produtos (name, qtd, price, available) VALUES
+('Pão de Açúcar', 50, 3.00, true),
+('Refrigerante Coca-Cola 350ml', 30, 5.00, true),
+('Salgadinho Chips', 25, 3.00, true),
+('Café Expresso', 100, 3.00, true),
+('Sanduíche Natural', 15, 8.00, true),
+('Água Mineral 500ml', 40, 2.50, true),
+('Bolo de Chocolate', 10, 4.50, true),
+('Suco de Laranja', 20, 4.00, true),
+('Biscoito Recheado', 35, 2.00, true),
+('Iogurte Natural', 25, 3.50, true);
+
+-- Vendas de exemplo
+INSERT INTO vendas (produto_id, usuario_id) VALUES
+(1, 1), (2, 1), (3, 2), (4, 1), (5, 2),
+(6, 3), (7, 2), (8, 1), (1, 3), (2, 2);
+
+-- =====================================
+-- VIEWS ÚTEIS PARA RELATÓRIOS
+-- =====================================
+
+-- View para produtos com baixo estoque
+CREATE VIEW produtos_baixo_estoque AS
+SELECT 
+    id,
+    name,
+    qtd,
+    price,
     CASE 
-        WHEN p.estoque_atual <= (p.estoque_minimo * 0.5) THEN 'CRÍTICO'
-        WHEN p.estoque_atual <= p.estoque_minimo THEN 'BAIXO'
-        ELSE 'NORMAL'
-    END AS status_estoque,
-    p.ativo
-FROM produtos p
-LEFT JOIN categorias c ON p.categoria_id = c.id
-WHERE p.ativo = TRUE;
+        WHEN qtd <= 5 THEN 'Crítico'
+        WHEN qtd <= 10 THEN 'Baixo'
+        ELSE 'Normal'
+    END as status_estoque
+FROM produtos 
+WHERE qtd <= 10 AND available = true;
 
--- View de vendas do dia
-CREATE VIEW vw_vendas_hoje AS
+-- View para relatório de vendas
+CREATE VIEW relatorio_vendas AS
 SELECT 
-    COUNT(*) AS total_vendas,
-    SUM(valor_final) AS total_faturamento,
-    AVG(valor_final) AS ticket_medio
-FROM vendas 
-WHERE DATE(data_venda) = CURDATE() 
-AND status_venda = 'concluida';
+    v.id,
+    v.createdAt,
+    p.name as produto_nome,
+    p.price as produto_preco,
+    u.user as usuario_nome
+FROM vendas v
+JOIN produtos p ON v.produto_id = p.id
+JOIN usuarios u ON v.usuario_id = u.id
+ORDER BY v.createdAt DESC;
 
--- View de produtos mais vendidos
-CREATE VIEW vw_produtos_mais_vendidos AS
-SELECT 
-    p.nome,
-    SUM(iv.quantidade) AS total_vendido,
-    SUM(iv.subtotal) AS total_faturamento
-FROM produtos p
-INNER JOIN itens_venda iv ON p.id = iv.produto_id
-INNER JOIN vendas v ON iv.venda_id = v.id
-WHERE v.status_venda = 'concluida'
-GROUP BY p.id, p.nome
-ORDER BY total_vendido DESC;
-
--- =====================================================
+-- =====================================
 -- PROCEDURES ÚTEIS
--- =====================================================
+-- =====================================
 
--- Procedure para registrar movimentação de estoque
 DELIMITER //
-CREATE PROCEDURE sp_movimentar_estoque(
+
+-- Procedure para registrar venda e atualizar estoque
+CREATE PROCEDURE RegistrarVenda(
     IN p_produto_id INT,
-    IN p_tipo ENUM('entrada', 'saida', 'ajuste', 'venda'),
-    IN p_quantidade INT,
-    IN p_valor_unitario DECIMAL(10,2),
-    IN p_observacoes TEXT,
     IN p_usuario_id INT
 )
 BEGIN
-    DECLARE v_estoque_atual INT;
-    DECLARE v_novo_estoque INT;
+    DECLARE produto_qtd INT;
+    DECLARE produto_disponivel BOOLEAN;
     
-    -- Buscar estoque atual
-    SELECT estoque_atual INTO v_estoque_atual 
-    FROM produtos 
-    WHERE id = p_produto_id;
+    -- Verificar se o produto existe e está disponível
+    SELECT qtd, available INTO produto_qtd, produto_disponivel 
+    FROM produtos WHERE id = p_produto_id;
     
-    -- Calcular novo estoque
-    IF p_tipo IN ('entrada', 'ajuste') THEN
-        SET v_novo_estoque = v_estoque_atual + p_quantidade;
+    -- Verificar se há estoque suficiente
+    IF produto_qtd > 0 AND produto_disponivel = true THEN
+        -- Registrar a venda
+        INSERT INTO vendas (produto_id, usuario_id) VALUES (p_produto_id, p_usuario_id);
+        
+        -- Reduzir o estoque
+        UPDATE produtos SET qtd = qtd - 1 WHERE id = p_produto_id;
+        
+        SELECT 'Venda registrada com sucesso!' as message, 
+               LAST_INSERT_ID() as venda_id;
     ELSE
-        SET v_novo_estoque = v_estoque_atual - p_quantidade;
+        SELECT 'Produto indisponível ou sem estoque!' as error;
     END IF;
-    
-    -- Verificar se estoque não fica negativo
-    IF v_novo_estoque < 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Estoque insuficiente';
-    END IF;
-    
-    -- Inserir movimentação
-    INSERT INTO movimentacao_estoque 
-    (produto_id, tipo_movimentacao, quantidade, estoque_anterior, estoque_novo, valor_unitario, valor_total, observacoes, usuario_id)
-    VALUES 
-    (p_produto_id, p_tipo, p_quantidade, v_estoque_atual, v_novo_estoque, p_valor_unitario, p_valor_unitario * p_quantidade, p_observacoes, p_usuario_id);
-    
-    -- Atualizar estoque do produto
+END //
+
+-- Procedure para adicionar estoque
+CREATE PROCEDURE AdicionarEstoque(
+    IN p_produto_id INT,
+    IN p_quantidade INT
+)
+BEGIN
     UPDATE produtos 
-    SET estoque_atual = v_novo_estoque,
-        ultima_alteracao = CURRENT_TIMESTAMP
+    SET qtd = qtd + p_quantidade 
     WHERE id = p_produto_id;
     
+    SELECT CONCAT('Estoque atualizado. Nova quantidade: ', qtd) as message
+    FROM produtos WHERE id = p_produto_id;
 END //
-DELIMITER ;
 
--- =====================================================
--- TRIGGERS
--- =====================================================
-
--- Trigger para gerar número da venda automaticamente
-DELIMITER //
-CREATE TRIGGER tr_gerar_numero_venda 
-BEFORE INSERT ON vendas
-FOR EACH ROW
+-- Procedure para obter estatísticas do dashboard
+CREATE PROCEDURE ObterEstatisticas()
 BEGIN
-    IF NEW.numero_venda IS NULL OR NEW.numero_venda = '' THEN
-        SET NEW.numero_venda = CONCAT('V', YEAR(NOW()), LPAD(MONTH(NOW()), 2, '0'), LPAD(DAY(NOW()), 2, '0'), LPAD((SELECT IFNULL(MAX(SUBSTRING(numero_venda, -4)), 0) + 1 FROM vendas WHERE DATE(data_venda) = CURDATE()), 4, '0'));
-    END IF;
+    SELECT 
+        (SELECT COUNT(*) FROM produtos WHERE available = true) as total_produtos,
+        (SELECT COUNT(*) FROM vendas WHERE DATE(createdAt) = CURDATE()) as vendas_hoje,
+        (SELECT SUM(p.price) FROM vendas v JOIN produtos p ON v.produto_id = p.id WHERE DATE(v.createdAt) = CURDATE()) as receita_hoje,
+        (SELECT COUNT(*) FROM produtos WHERE qtd <= 5 AND available = true) as produtos_criticos;
 END //
+
 DELIMITER ;
 
--- =====================================================
+-- =====================================
 -- ÍNDICES PARA PERFORMANCE
--- =====================================================
+-- =====================================
 
-CREATE INDEX idx_movimentacao_data ON movimentacao_estoque(data_movimentacao DESC);
-CREATE INDEX idx_vendas_data ON vendas(data_venda DESC);
-CREATE INDEX idx_produtos_estoque ON produtos(estoque_atual, estoque_minimo);
-CREATE INDEX idx_produtos_ativo ON produtos(ativo);
+CREATE INDEX idx_produtos_nome ON produtos(name);
+CREATE INDEX idx_produtos_disponivel ON produtos(available);
+CREATE INDEX idx_vendas_data ON vendas(createdAt);
+CREATE INDEX idx_vendas_produto ON vendas(produto_id);
+CREATE INDEX idx_vendas_usuario ON vendas(usuario_id);
+CREATE INDEX idx_usuarios_user ON usuarios(user);
 
--- =====================================================
--- COMENTÁRIOS FINAIS
--- =====================================================
+-- =====================================
+-- CONFIGURAÇÕES FINAIS
+-- =====================================
 
-/*
-INSTRUÇÕES DE USO:
+-- Definir charset para tabelas existentes
+ALTER TABLE produtos CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE usuarios CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE vendas CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-1. Execute este script em seu MySQL/MariaDB
-2. Configure as credenciais no arquivo .env
-3. Ajuste o server.js para usar o banco real em vez do mock
-4. Os dados de exemplo incluem:
-   - Usuários: admin/admin, operador/operador  
-   - 6 categorias de produtos
-   - 8 produtos de exemplo
-   - 3 fornecedores
-
-PRÓXIMOS PASSOS:
-- Implementar hash real de senhas
-- Configurar conexão com banco no server.js
-- Adicionar validações de negócio
-- Implementar logs de auditoria
-- Adicionar backup automático
-
-SEGURANÇA:
-- Alterar senhas padrão
-- Configurar SSL
-- Implementar rate limiting
-- Validar todas as entradas
-*/
+-- =====================================
+-- SETUP CONCLUÍDO
+-- =====================================
+-- Execute este arquivo no seu MySQL para criar
+-- toda a estrutura necessária para o sistema.
+-- 
+-- Credenciais padrão:
+-- - Usuário: admin, Senha: 123456
+-- - Usuário: cantina, Senha: 123456
+-- - Usuário: funcionario, Senha: 123456
+-- =====================================

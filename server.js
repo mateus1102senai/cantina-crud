@@ -1,7 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+// Importar módulo do banco
+const { query, testConnection } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -10,253 +14,363 @@ const PORT = process.env.PORT || 3002;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
 
-// Simulação de banco de dados em memória
-let produtos = [
-  { id: 1, nome: 'Sanduíche Natural', categoria: 'lanches', preco: 6.00, estoque: 25, estoqueMinimo: 10 },
-  { id: 2, nome: 'Suco de Laranja', categoria: 'bebidas', preco: 5.50, estoque: 8, estoqueMinimo: 15 },
-  { id: 3, nome: 'Pastel de Frango', categoria: 'salgados', preco: 6.50, estoque: 2, estoqueMinimo: 10 },
-  { id: 4, nome: 'Refrigerante Coca', categoria: 'bebidas', preco: 4.00, estoque: 30, estoqueMinimo: 20 },
-  { id: 5, nome: 'Brigadeiro', categoria: 'doces', preco: 2.00, estoque: 15, estoqueMinimo: 12 }
-];
+// Middleware de autenticação JWT (opcional para algumas rotas)
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-let vendas = [
-  { id: 1, produtoId: 1, produto: 'Sanduíche Natural', quantidade: 2, valor: 12.00, data: new Date().toISOString() },
-  { id: 2, produtoId: 2, produto: 'Suco de Laranja', quantidade: 1, valor: 5.50, data: new Date().toISOString() }
-];
+  if (!token) {
+    return res.status(401).json({ error: 'Token de acesso requerido' });
+  }
 
-let nextId = produtos.length + 1;
-let nextVendaId = vendas.length + 1;
-
-// Usuário padrão para demonstração
-const usuario = {
-  username: 'admin',
-  password: 'admin', // Em produção, use hash da senha
-  role: 'admin'
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token inválido' });
+    }
+    req.user = user;
+    next();
+  });
 };
 
-// ===== ROTAS DE AUTENTICAÇÃO =====
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  
-  console.log('Tentativa de login:', { username, password });
-  
-  if (username === usuario.username && password === usuario.password) {
-    // Em produção, gerar JWT token real
-    const token = 'fake-jwt-token-' + Date.now();
+// =====================================================
+// ROTAS DE AUTENTICAÇÃO
+// =====================================================
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
+    }
+
+    // Buscar usuário no banco
+    const userResult = await query(
+      'SELECT id, "user" as username, password FROM usuarios WHERE "user" = $1',
+      [username]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Para demonstração, aceita senha "123456" ou verifica hash
+    const validPassword = password === '123456' || await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+
     res.json({
-      success: true,
+      message: 'Login realizado com sucesso',
       token,
       user: {
-        username: usuario.username,
-        role: usuario.role
+        id: user.id,
+        username: user.username
       }
     });
-  } else {
-    res.status(401).json({
-      success: false,
-      message: 'Credenciais inválidas'
-    });
+
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
-// ===== ROTAS DE PRODUTOS =====
+// =====================================================
+// ROTAS DE PRODUTOS
+// =====================================================
+
 // Listar todos os produtos
-app.get('/api/produtos', (req, res) => {
-  const produtosComStatus = produtos.map(produto => ({
-    ...produto,
-    status: produto.estoque <= produto.estoqueMinimo * 0.5 ? 'critico'
-           : produto.estoque <= produto.estoqueMinimo ? 'baixo'
-           : 'ok'
-  }));
-  
-  res.json(produtosComStatus);
+app.get('/api/produtos', async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, name, qtd, price, available FROM produtos WHERE available = true ORDER BY name'
+    );
+
+    const produtos = result.rows.map(row => ({
+      id: row.id,
+      nome: row.name,
+      estoque: row.qtd,
+      preco: parseFloat(row.price),
+      disponivel: row.available,
+      status: row.qtd <= 5 ? 'critico' : row.qtd <= 10 ? 'baixo' : 'normal'
+    }));
+
+    res.json(produtos);
+  } catch (error) {
+    console.error('Erro ao listar produtos:', error);
+    res.status(500).json({ error: 'Erro ao buscar produtos' });
+  }
 });
 
 // Buscar produto por ID
-app.get('/api/produtos/:id', (req, res) => {
-  const produto = produtos.find(p => p.id === parseInt(req.params.id));
-  if (produto) {
-    res.json(produto);
-  } else {
-    res.status(404).json({ message: 'Produto não encontrado' });
+app.get('/api/produtos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      'SELECT id, name, qtd, price, available FROM produtos WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+
+    const produto = result.rows[0];
+    res.json({
+      id: produto.id,
+      nome: produto.name,
+      estoque: produto.qtd,
+      preco: parseFloat(produto.price),
+      disponivel: produto.available
+    });
+  } catch (error) {
+    console.error('Erro ao buscar produto:', error);
+    res.status(500).json({ error: 'Erro ao buscar produto' });
   }
 });
 
 // Criar novo produto
-app.post('/api/produtos', (req, res) => {
-  const { nome, descricao, preco, categoria, estoque, estoqueMinimo } = req.body;
-  
-  if (!nome || !preco || !categoria || estoque === undefined || estoqueMinimo === undefined) {
-    return res.status(400).json({ message: 'Campos obrigatórios: nome, preco, categoria, estoque, estoqueMinimo' });
+app.post('/api/produtos', async (req, res) => {
+  try {
+    const { nome, preco, estoque = 0 } = req.body;
+
+    if (!nome || !preco) {
+      return res.status(400).json({ error: 'Nome e preço são obrigatórios' });
+    }
+
+    const result = await query(
+      'INSERT INTO produtos (name, qtd, price, available) VALUES ($1, $2, $3, $4) RETURNING *',
+      [nome, estoque, preco, true]
+    );
+
+    const produto = result.rows[0];
+    res.status(201).json({
+      id: produto.id,
+      nome: produto.name,
+      estoque: produto.qtd,
+      preco: parseFloat(produto.price),
+      disponivel: produto.available
+    });
+  } catch (error) {
+    console.error('Erro ao criar produto:', error);
+    res.status(500).json({ error: 'Erro ao criar produto' });
   }
-  
-  const novoProduto = {
-    id: nextId++,
-    nome,
-    descricao: descricao || '',
-    preco: parseFloat(preco),
-    categoria,
-    estoque: parseInt(estoque),
-    estoqueMinimo: parseInt(estoqueMinimo)
-  };
-  
-  produtos.push(novoProduto);
-  
-  console.log('Produto criado:', novoProduto);
-  
-  res.status(201).json({
-    success: true,
-    message: 'Produto criado com sucesso',
-    produto: novoProduto
-  });
 });
 
 // Atualizar produto
-app.put('/api/produtos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const produtoIndex = produtos.findIndex(p => p.id === id);
-  
-  if (produtoIndex === -1) {
-    return res.status(404).json({ message: 'Produto não encontrado' });
+app.put('/api/produtos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nome, preco, estoque, disponivel } = req.body;
+
+    const result = await query(
+      'UPDATE produtos SET name = $1, price = $2, qtd = $3, available = $4 WHERE id = $5 RETURNING *',
+      [nome, preco, estoque, disponivel, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+
+    const produto = result.rows[0];
+    res.json({
+      id: produto.id,
+      nome: produto.name,
+      estoque: produto.qtd,
+      preco: parseFloat(produto.price),
+      disponivel: produto.available
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar produto:', error);
+    res.status(500).json({ error: 'Erro ao atualizar produto' });
   }
-  
-  const { nome, descricao, preco, categoria, estoque, estoqueMinimo } = req.body;
-  
-  produtos[produtoIndex] = {
-    ...produtos[produtoIndex],
-    ...(nome && { nome }),
-    ...(descricao !== undefined && { descricao }),
-    ...(preco && { preco: parseFloat(preco) }),
-    ...(categoria && { categoria }),
-    ...(estoque !== undefined && { estoque: parseInt(estoque) }),
-    ...(estoqueMinimo !== undefined && { estoqueMinimo: parseInt(estoqueMinimo) })
-  };
-  
-  console.log('Produto atualizado:', produtos[produtoIndex]);
-  
-  res.json({
-    success: true,
-    message: 'Produto atualizado com sucesso',
-    produto: produtos[produtoIndex]
-  });
 });
 
-// Deletar produto
-app.delete('/api/produtos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const produtoIndex = produtos.findIndex(p => p.id === id);
-  
-  if (produtoIndex === -1) {
-    return res.status(404).json({ message: 'Produto não encontrado' });
+// Deletar produto (soft delete)
+app.delete('/api/produtos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await query(
+      'UPDATE produtos SET available = false WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+
+    res.json({ message: 'Produto removido com sucesso' });
+  } catch (error) {
+    console.error('Erro ao deletar produto:', error);
+    res.status(500).json({ error: 'Erro ao remover produto' });
   }
-  
-  produtos.splice(produtoIndex, 1);
-  
-  console.log('Produto deletado, ID:', id);
-  
-  res.json({
-    success: true,
-    message: 'Produto deletado com sucesso'
-  });
 });
 
-// ===== ROTAS DE VENDAS =====
-// Listar vendas
-app.get('/api/vendas', (req, res) => {
-  res.json(vendas);
-});
+// =====================================================
+// ROTAS DE VENDAS
+// =====================================================
 
-// Registrar venda
-app.post('/api/vendas', (req, res) => {
-  const { produtoId, quantidade } = req.body;
-  
-  const produto = produtos.find(p => p.id === parseInt(produtoId));
-  if (!produto) {
-    return res.status(404).json({ message: 'Produto não encontrado' });
+// Listar todas as vendas
+app.get('/api/vendas', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT 
+        v.id,
+        v.created_at,
+        p.name as produto_nome,
+        p.price as produto_preco,
+        u."user" as usuario_nome
+      FROM vendas v
+      JOIN produtos p ON v.produto_id = p.id
+      JOIN usuarios u ON v.usuario_id = u.id
+      ORDER BY v.created_at DESC
+      LIMIT 50
+    `);
+
+    const vendas = result.rows.map(row => ({
+      id: row.id,
+      data: row.created_at,
+      produto: row.produto_nome,
+      preco: parseFloat(row.produto_preco),
+      usuario: row.usuario_nome
+    }));
+
+    res.json(vendas);
+  } catch (error) {
+    console.error('Erro ao listar vendas:', error);
+    res.status(500).json({ error: 'Erro ao buscar vendas' });
   }
-  
-  if (produto.estoque < quantidade) {
-    return res.status(400).json({ message: 'Estoque insuficiente' });
+});
+
+// Registrar nova venda
+app.post('/api/vendas', async (req, res) => {
+  try {
+    const { produto_id, usuario_id = 1 } = req.body;
+
+    if (!produto_id) {
+      return res.status(400).json({ error: 'ID do produto é obrigatório' });
+    }
+
+    // Usar function do PostgreSQL para registrar venda
+    const result = await query(
+      'SELECT registrar_venda($1, $2) as resultado',
+      [produto_id, usuario_id]
+    );
+
+    const resultado = result.rows[0].resultado;
+
+    if (resultado.success) {
+      res.status(201).json(resultado);
+    } else {
+      res.status(400).json(resultado);
+    }
+  } catch (error) {
+    console.error('Erro ao registrar venda:', error);
+    res.status(500).json({ error: 'Erro ao registrar venda' });
   }
-  
-  // Atualizar estoque
-  produto.estoque -= quantidade;
-  
-  // Registrar venda
-  const novaVenda = {
-    id: nextVendaId++,
-    produtoId: produto.id,
-    produto: produto.nome,
-    quantidade,
-    valor: produto.preco * quantidade,
-    data: new Date().toISOString()
-  };
-  
-  vendas.unshift(novaVenda); // Adiciona no início da lista
-  
-  console.log('Venda registrada:', novaVenda);
-  
-  res.status(201).json({
-    success: true,
-    message: 'Venda registrada com sucesso',
-    venda: novaVenda
-  });
 });
 
-// ===== ROTA DO DASHBOARD =====
-app.get('/api/dashboard', (req, res) => {
-  const totalProdutos = produtos.length;
-  const totalVendas = vendas.length;
-  const estoqueBaixo = produtos.filter(p => p.estoque <= p.estoqueMinimo).length;
-  
-  // Vendas de hoje
-  const hoje = new Date().toDateString();
-  const vendasHoje = vendas.filter(v => new Date(v.data).toDateString() === hoje);
-  const vendaHoje = vendasHoje.reduce((total, venda) => total + venda.valor, 0);
-  
-  // Últimas vendas (5 mais recentes)
-  const ultimasVendas = vendas.slice(0, 5).map(venda => ({
-    ...venda,
-    data: new Date(venda.data).toLocaleString('pt-BR')
-  }));
-  
-  res.json({
-    totalProdutos,
-    totalVendas,
-    estoqueBaixo,
-    vendaHoje,
-    ultimasVendas
-  });
+// =====================================================
+// ROTA DO DASHBOARD
+// =====================================================
+
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    // Usar function do PostgreSQL para obter estatísticas
+    const result = await query('SELECT obter_estatisticas() as stats');
+    const stats = result.rows[0].stats;
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Erro ao obter estatísticas:', error);
+    // Fallback com dados mock se houver erro
+    res.json({
+      total_produtos: 0,
+      vendas_hoje: 0,
+      receita_hoje: 0,
+      produtos_criticos: 0
+    });
+  }
 });
 
-// ===== ROTA DE HEALTH CHECK =====
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    message: 'Servidor da Cantina funcionando!'
-  });
+// =====================================================
+// ROTA DE SAÚDE
+// =====================================================
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await query('SELECT 1');
+    res.json({ 
+      status: 'OK', 
+      database: 'Connected',
+      timestamp: new Date().toISOString(),
+      version: process.env.APP_VERSION || '1.0.0'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'ERROR', 
+      database: 'Disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
-// Middleware de erro
-app.use((err, req, res, next) => {
-  console.error('Erro no servidor:', err);
-  res.status(500).json({ 
-    message: 'Erro interno do servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Algo deu errado'
-  });
-});
+// =====================================================
+// ROTA 404
+// =====================================================
 
-// Rota 404
 app.use((req, res) => {
-  res.status(404).json({ message: 'Rota não encontrada' });
+  res.status(404).json({ 
+    message: 'Rota não encontrada',
+    availableRoutes: [
+      'POST /api/auth/login',
+      'GET /api/produtos',
+      'POST /api/produtos',
+      'PUT /api/produtos/:id',
+      'DELETE /api/produtos/:id',
+      'GET /api/vendas',
+      'POST /api/vendas',
+      'GET /api/dashboard',
+      'GET /api/health'
+    ]
+  });
 });
 
-// Inicializar servidor
-app.listen(PORT, () => {
-  console.log(`
+// =====================================================
+// INICIALIZAR SERVIDOR
+// =====================================================
+
+const startServer = async () => {
+  try {
+    // Testar conexão com banco
+    const dbConnected = await testConnection();
+    
+    if (!dbConnected) {
+      console.error('❌ Falha ao conectar com PostgreSQL');
+      console.log('📝 Verifique se:');
+      console.log('   - PostgreSQL está rodando');
+      console.log('   - Banco "cantina_crud" existe');
+      console.log('   - Credenciais no .env estão corretas');
+      console.log('   - Execute o arquivo setup.sql no PostgreSQL');
+      process.exit(1);
+    }
+
+    app.listen(PORT, () => {
+      console.log(`
 🍽️  Servidor da Cantina rodando!
 📡  Porta: ${PORT}
 🌐  URL: http://localhost:${PORT}
@@ -273,5 +387,27 @@ app.listen(PORT, () => {
    POST /api/vendas
    GET  /api/dashboard
    GET  /api/health
-  `);
+
+🔗  Banco: PostgreSQL (${process.env.DB_NAME})
+🔑  Usuário padrão: admin / senha: 123456
+      `);
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao iniciar servidor:', error);
+    process.exit(1);
+  }
+};
+
+// Tratar erros não capturados
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Iniciar servidor
+startServer();
